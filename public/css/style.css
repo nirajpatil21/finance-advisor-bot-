@@ -24,6 +24,7 @@ body { background: var(--bg); }
 }
 .stat-card.income { background: linear-gradient(135deg, #2e7d5b, #43a677); }
 .stat-card.spent { background: linear-gradient(135deg, #c0392b, #e5766a); }
+.stat-card.wants { background: linear-gradient(135deg, #bb7412, #f2a541); }
 .stat-card.savings { background: linear-gradient(135deg, #2c6fa8, #4f9bd1); }
 
 .stat-card h6 { opacity: 0.85; margin-bottom: 0.25rem; }

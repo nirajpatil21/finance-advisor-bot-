@@ -9,10 +9,13 @@ functional out of the box.
 """
 import os
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
-NEEDS_CATEGORIES = {"Rent", "Groceries", "Utilities", "Transport", "Healthcare"}
+NEEDS_CATEGORIES = {"Rent", "Groceries", "Utilities", "Transport", "Healthcare", "Education"}
 WANTS_CATEGORIES = {"Food", "Entertainment", "Shopping", "Other"}
 SAVINGS_TARGET_PCT = 0.20
 NEEDS_TARGET_PCT = 0.50
@@ -90,7 +93,7 @@ def generate_budget_plan(monthly_income, expenses_by_category):
             result["narrative"] = _call_gemini(prompt).strip()
             return result
         except Exception:
-            pass  # fall through to rule-based narrative
+            logger.exception("Gemini budget narrative generation failed; using the rule-based narrative.")
 
     result["narrative"] = _rule_based_narrative(monthly_income, expenses_by_category, result)
     return result
@@ -137,7 +140,7 @@ def generate_spending_insights(monthly_income, expenses_by_category, previous_mo
             if isinstance(insights, list) and insights:
                 return insights[:3]
         except Exception:
-            pass
+            logger.exception("Gemini spending insights generation failed; using rule-based insights.")
 
     return _rule_based_insights(monthly_income, expenses_by_category, previous_month_expenses)
 

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime, timezone
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -11,13 +11,17 @@ EXPENSE_CATEGORIES = [
 ]
 
 
+def utc_now():
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), default="individual")  # individual, student, freelancer, household
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utc_now)
 
     incomes = db.relationship("Income", backref="user", cascade="all, delete-orphan")
     expenses = db.relationship("Expense", backref="user", cascade="all, delete-orphan")
@@ -36,7 +40,7 @@ class Income(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     source = db.Column(db.String(100), nullable=False)
     amount = db.Column(db.Float, nullable=False)
-    date = db.Column(db.Date, default=datetime.utcnow, nullable=False)
+    date = db.Column(db.Date, default=date.today, nullable=False)
     is_recurring = db.Column(db.Boolean, default=False)
     notes = db.Column(db.String(255))
 
@@ -50,7 +54,7 @@ class Expense(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     category = db.Column(db.String(50), nullable=False)
     amount = db.Column(db.Float, nullable=False)
-    date = db.Column(db.Date, default=datetime.utcnow, nullable=False)
+    date = db.Column(db.Date, default=date.today, nullable=False)
     description = db.Column(db.String(255))
 
     @property
@@ -75,7 +79,7 @@ class SavingGoal(db.Model):
     target_amount = db.Column(db.Float, nullable=False)
     current_amount = db.Column(db.Float, default=0.0)
     deadline = db.Column(db.Date)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utc_now)
 
     @property
     def progress_pct(self):

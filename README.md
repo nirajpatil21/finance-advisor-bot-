@@ -40,6 +40,15 @@ Visit http://localhost:5000, register an account, and start logging income
 and expenses. The database file `finance_advisor.db` is created
 automatically on first run.
 
+Income entries marked as recurring are included in their entry month and
+subsequent monthly reports. They do not create duplicate database records.
+
+Run the automated regression suite with:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
 ## Deploying to Vercel
 
 The repository is configured for Vercel's Python runtime. Import the GitHub

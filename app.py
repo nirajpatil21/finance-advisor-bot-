@@ -1,24 +1,50 @@
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from calendar import month_name
-from collections import defaultdict
+from decimal import Decimal, InvalidOperation
+import math
+import re
 
 from flask import Flask, render_template, redirect, url_for, request, flash, jsonify
 from flask_login import (
     LoginManager, login_user, logout_user, login_required, current_user,
 )
+from sqlalchemy import func, or_
+from sqlalchemy.exc import IntegrityError
 
 from config import Config, IS_VERCEL
-from models import db, User, Income, Expense, Budget, SavingGoal, EXPENSE_CATEGORIES
+from models import db, User, Income, Expense, SavingGoal, EXPENSE_CATEGORIES
 import ai_engine
 
 
-def create_app():
+VALID_ROLES = {"individual", "student", "freelancer", "household"}
+
+
+def _parse_positive_amount(raw_value):
+    try:
+        value = float(Decimal(raw_value))
+    except (InvalidOperation, TypeError, ValueError, OverflowError):
+        return None
+    if not math.isfinite(value) or value <= 0:
+        return None
+    return value
+
+
+def _parse_date(raw_value):
+    try:
+        return datetime.strptime(raw_value, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
+
+
+def create_app(test_config=None):
     app = Flask(
         __name__,
         static_folder=None if IS_VERCEL else "public",
         static_url_path="",
     )
     app.config.from_object(Config)
+    if test_config:
+        app.config.update(test_config)
 
     db.init_app(app)
 
@@ -28,7 +54,10 @@ def create_app():
 
     @login_manager.user_loader
     def load_user(user_id):
-        return User.query.get(int(user_id))
+        try:
+            return db.session.get(User, int(user_id))
+        except (TypeError, ValueError):
+            return None
 
     with app.app_context():
         db.create_all()
@@ -38,35 +67,82 @@ def create_app():
         d = d or date.today()
         return d.strftime("%Y-%m")
 
+    def month_bounds(month_key):
+        month_start = datetime.strptime(month_key, "%Y-%m").date().replace(day=1)
+        if month_start.month == 12:
+            next_month = date(month_start.year + 1, 1, 1)
+        else:
+            next_month = date(month_start.year, month_start.month + 1, 1)
+        return month_start, next_month
+
     def month_expenses_by_category(user_id, month_key):
-        rows = Expense.query.filter_by(user_id=user_id).all()
-        data = defaultdict(float)
-        for r in rows:
-            if r.month_key == month_key:
-                data[r.category] += r.amount
-        return dict(data)
+        month_start, next_month = month_bounds(month_key)
+        rows = (
+            db.session.query(Expense.category, func.sum(Expense.amount))
+            .filter(
+                Expense.user_id == user_id,
+                Expense.date >= month_start,
+                Expense.date < next_month,
+            )
+            .group_by(Expense.category)
+            .all()
+        )
+        return {category: float(amount) for category, amount in rows}
 
     def month_income_total(user_id, month_key):
-        rows = Income.query.filter_by(user_id=user_id).all()
-        return sum(r.amount for r in rows if r.month_key == month_key)
+        month_start, next_month = month_bounds(month_key)
+        total = (
+            db.session.query(func.sum(Income.amount))
+            .filter(
+                Income.user_id == user_id,
+                Income.date < next_month,
+                or_(Income.date >= month_start, Income.is_recurring.is_(True)),
+            )
+            .scalar()
+        )
+        return float(total or 0)
 
     # ---------- auth ----------
     @app.route("/register", methods=["GET", "POST"])
     def register():
         if request.method == "POST":
-            username = request.form["username"].strip()
-            email = request.form["email"].strip()
-            password = request.form["password"]
+            username = request.form.get("username", "").strip().lower()
+            email = request.form.get("email", "").strip().lower()
+            password = request.form.get("password", "")
             role = request.form.get("role", "individual")
 
-            if User.query.filter((User.username == username) | (User.email == email)).first():
+            if not username or len(username) > 80:
+                flash("Enter a username of up to 80 characters.", "danger")
+                return redirect(url_for("register"))
+            if (
+                len(email) > 120
+                or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email)
+            ):
+                flash("Enter a valid email address.", "danger")
+                return redirect(url_for("register"))
+            if len(password) < 6:
+                flash("Password must be at least 6 characters long.", "danger")
+                return redirect(url_for("register"))
+            if role not in VALID_ROLES:
+                flash("Select a valid account type.", "danger")
+                return redirect(url_for("register"))
+
+            if User.query.filter(
+                (func.lower(User.username) == username)
+                | (func.lower(User.email) == email)
+            ).first():
                 flash("Username or email already exists.", "danger")
                 return redirect(url_for("register"))
 
             user = User(username=username, email=email, role=role)
             user.set_password(password)
             db.session.add(user)
-            db.session.commit()
+            try:
+                db.session.commit()
+            except IntegrityError:
+                db.session.rollback()
+                flash("Username or email already exists.", "danger")
+                return redirect(url_for("register"))
             flash("Account created. Please log in.", "success")
             return redirect(url_for("login"))
         return render_template("register.html")
@@ -74,10 +150,11 @@ def create_app():
     @app.route("/login", methods=["GET", "POST"])
     def login():
         if request.method == "POST":
-            identifier = request.form["identifier"].strip()
-            password = request.form["password"]
+            identifier = request.form.get("identifier", "").strip()
+            password = request.form.get("password", "")
             user = User.query.filter(
-                (User.username == identifier) | (User.email == identifier)
+                (func.lower(User.username) == identifier.lower())
+                | (func.lower(User.email) == identifier.lower())
             ).first()
             if user and user.check_password(password):
                 login_user(user)
@@ -101,7 +178,7 @@ def create_app():
         total_spent = sum(expenses.values())
         savings = income_total - total_spent
 
-        prev_month = (date.today().replace(day=1) - __import__("datetime").timedelta(days=1)).strftime("%Y-%m")
+        prev_month = (date.today().replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
         prev_expenses = month_expenses_by_category(current_user.id, prev_month)
 
         insights = ai_engine.generate_spending_insights(income_total, expenses, prev_expenses)
@@ -123,14 +200,23 @@ def create_app():
     @login_required
     def income():
         if request.method == "POST":
-            source = request.form["source"].strip()
-            amount = float(request.form["amount"])
-            income_date = datetime.strptime(request.form["date"], "%Y-%m-%d").date()
+            source = request.form.get("source", "").strip()
+            amount = _parse_positive_amount(request.form.get("amount"))
+            income_date = _parse_date(request.form.get("date"))
+            if not source or len(source) > 100:
+                flash("Enter an income source of up to 100 characters.", "danger")
+                return redirect(url_for("income"))
+            if amount is None:
+                flash("Enter an amount greater than zero.", "danger")
+                return redirect(url_for("income"))
+            if income_date is None:
+                flash("Enter a valid income date.", "danger")
+                return redirect(url_for("income"))
             is_recurring = bool(request.form.get("is_recurring"))
             db.session.add(Income(
                 user_id=current_user.id, source=source, amount=amount,
                 date=income_date, is_recurring=is_recurring,
-                notes=request.form.get("notes", ""),
+                notes=request.form.get("notes", "").strip()[:255],
             ))
             db.session.commit()
             flash("Income logged.", "success")
@@ -152,12 +238,22 @@ def create_app():
     @login_required
     def expenses():
         if request.method == "POST":
-            category = request.form["category"]
-            amount = float(request.form["amount"])
-            expense_date = datetime.strptime(request.form["date"], "%Y-%m-%d").date()
+            category = request.form.get("category", "")
+            amount = _parse_positive_amount(request.form.get("amount"))
+            expense_date = _parse_date(request.form.get("date"))
+            if category not in EXPENSE_CATEGORIES:
+                flash("Select a valid expense category.", "danger")
+                return redirect(url_for("expenses"))
+            if amount is None:
+                flash("Enter an amount greater than zero.", "danger")
+                return redirect(url_for("expenses"))
+            if expense_date is None:
+                flash("Enter a valid expense date.", "danger")
+                return redirect(url_for("expenses"))
             db.session.add(Expense(
                 user_id=current_user.id, category=category, amount=amount,
-                date=expense_date, description=request.form.get("description", ""),
+                date=expense_date,
+                description=request.form.get("description", "").strip()[:255],
             ))
             db.session.commit()
             flash("Expense logged.", "success")
@@ -194,10 +290,19 @@ def create_app():
     @login_required
     def goals():
         if request.method == "POST":
-            name = request.form["name"].strip()
-            target = float(request.form["target_amount"])
-            deadline_raw = request.form.get("deadline")
-            deadline = datetime.strptime(deadline_raw, "%Y-%m-%d").date() if deadline_raw else None
+            name = request.form.get("name", "").strip()
+            target = _parse_positive_amount(request.form.get("target_amount"))
+            deadline_raw = request.form.get("deadline", "").strip()
+            deadline = _parse_date(deadline_raw) if deadline_raw else None
+            if not name or len(name) > 100:
+                flash("Enter a goal name of up to 100 characters.", "danger")
+                return redirect(url_for("goals"))
+            if target is None:
+                flash("Enter a target amount greater than zero.", "danger")
+                return redirect(url_for("goals"))
+            if deadline_raw and deadline is None:
+                flash("Enter a valid goal deadline.", "danger")
+                return redirect(url_for("goals"))
             db.session.add(SavingGoal(
                 user_id=current_user.id, name=name, target_amount=target, deadline=deadline,
             ))
@@ -212,7 +317,10 @@ def create_app():
     @login_required
     def contribute_goal(goal_id):
         goal = SavingGoal.query.filter_by(id=goal_id, user_id=current_user.id).first_or_404()
-        amount = float(request.form["amount"])
+        amount = _parse_positive_amount(request.form.get("amount"))
+        if amount is None:
+            flash("Enter a contribution greater than zero.", "danger")
+            return redirect(url_for("goals"))
         goal.current_amount = (goal.current_amount or 0) + amount
         db.session.commit()
         return redirect(url_for("goals"))
@@ -222,6 +330,14 @@ def create_app():
     @login_required
     def report():
         month_key = request.args.get("month", current_month_key())
+        try:
+            parsed_month = datetime.strptime(month_key, "%Y-%m")
+        except (TypeError, ValueError):
+            flash("Select a valid report month.", "danger")
+            return redirect(url_for("report"))
+        if parsed_month.strftime("%Y-%m") != month_key:
+            flash("Select a valid report month.", "danger")
+            return redirect(url_for("report"))
         income_total = month_income_total(current_user.id, month_key)
         expenses = month_expenses_by_category(current_user.id, month_key)
         total_spent = sum(expenses.values())
