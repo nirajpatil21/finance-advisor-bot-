@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Budget Plan{% endblock %}
+{% block content %}
+<h4 class="mb-3">🧠 AI-Generated Budget Plan</h4>
+
+<div class="card p-3 mb-3">
+  <h6 class="text-muted">Advisor's Note</h6>
+  <p class="mb-0">{{ plan.narrative }}</p>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-4">
+    <div class="stat-card income"><h6>Needs (50%)</h6><div class="value">₹{{ "%.2f"|format(plan.total_needs) }}</div></div>
+  </div>
+  <div class="col-md-4">
+    <div class="stat-card savings"><h6>Wants (30%)</h6><div class="value">₹{{ "%.2f"|format(plan.total_wants) }}</div></div>
+  </div>
+  <div class="col-md-4">
+    <div class="stat-card spent"><h6>Savings (20%)</h6><div class="value">₹{{ "%.2f"|format(plan.total_savings) }}</div></div>
+  </div>
+</div>
+
+<div class="card p-3 mt-3">
+  <h5 class="mb-3">Recommended Category Limits vs. Actual Spend</h5>
+  {% if plan.allocations %}
+  <div class="table-responsive">
+    <table class="table">
+      <thead><tr><th>Category</th><th>Recommended Limit</th><th>Actual Spend</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for cat, limit in plan.allocations.items() %}
+        {% set actual = expenses.get(cat, 0) %}
+        <tr>
+          <td>{{ cat }}</td>
+          <td>₹{{ "%.2f"|format(limit) }}</td>
+          <td>₹{{ "%.2f"|format(actual) }}</td>
+          <td>
+            {% if actual > limit %}
+              <span class="badge bg-danger">Over budget</span>
+            {% else %}
+              <span class="badge bg-success">On track</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <p class="text-muted">Log your income to generate a personalized budget plan.</p>
+  {% endif %}
+</div>
+{% endblock %}

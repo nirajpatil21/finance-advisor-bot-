@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Monthly Report{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">📊 Monthly Report — {{ month_key }}</h4>
+  <form method="GET" class="d-flex gap-2">
+    <input type="month" name="month" value="{{ month_key }}" class="form-control form-control-sm">
+    <button class="btn btn-sm btn-outline-primary">View</button>
+  </form>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-4">
+    <div class="stat-card income"><h6>Income</h6><div class="value">₹{{ "%.2f"|format(income_total) }}</div></div>
+  </div>
+  <div class="col-md-4">
+    <div class="stat-card spent"><h6>Expenses</h6><div class="value">₹{{ "%.2f"|format(total_spent) }}</div></div>
+  </div>
+  <div class="col-md-4">
+    <div class="stat-card savings"><h6>Savings</h6><div class="value">₹{{ "%.2f"|format(savings) }}</div></div>
+  </div>
+</div>
+
+<div class="card p-3 mb-3">
+  <h5 class="mb-3">Category Breakdown</h5>
+  {% if expenses %}
+  <table class="table">
+    <thead><tr><th>Category</th><th>Amount</th><th>% of Total</th></tr></thead>
+    <tbody>
+      {% for cat, amt in expenses.items() %}
+      <tr>
+        <td>{{ cat }}</td>
+        <td>₹{{ "%.2f"|format(amt) }}</td>
+        <td>{{ "%.1f"|format((amt / total_spent * 100) if total_spent else 0) }}%</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="text-muted">No expenses recorded for this month.</p>
+  {% endif %}
+</div>
+
+<div class="card p-3">
+  <h5 class="mb-3">🤖 AI Insights</h5>
+  {% for insight in insights %}
+    <div class="insight-item">{{ insight }}</div>
+  {% endfor %}
+</div>
+{% endblock %}

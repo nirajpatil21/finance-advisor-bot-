@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h3 class="mb-1">Hi {{ current_user.username }} 👋</h3>
+<p class="text-muted mb-4">{{ month_label }} overview</p>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="stat-card income">
+      <h6>Monthly Income</h6>
+      <div class="value">₹{{ "%.2f"|format(income_total) }}</div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="stat-card spent">
+      <h6>Total Spent</h6>
+      <div class="value">₹{{ "%.2f"|format(total_spent) }}</div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="stat-card savings">
+      <h6>Net Savings</h6>
+      <div class="value">₹{{ "%.2f"|format(savings) }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-6">
+    <div class="card p-3">
+      <h5 class="mb-3">Spending by Category</h5>
+      {% if expenses %}
+        <canvas id="catChart" height="220"></canvas>
+      {% else %}
+        <p class="text-muted">No expenses logged yet this month. <a href="{{ url_for('expenses') }}">Add one</a>.</p>
+      {% endif %}
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card p-3">
+      <h5 class="mb-3">🤖 AI Insights</h5>
+      {% for insight in insights %}
+        <div class="insight-item">{{ insight }}</div>
+      {% endfor %}
+      <a href="{{ url_for('budget') }}" class="btn btn-outline-primary btn-sm mt-2">View full budget plan →</a>
+    </div>
+  </div>
+</div>
+
+{% if goals %}
+<div class="card p-3 mt-3">
+  <h5 class="mb-3">🎯 Saving Goals</h5>
+  {% for g in goals %}
+    <div class="mb-2">
+      <div class="d-flex justify-content-between"><span>{{ g.name }}</span><span>{{ g.progress_pct }}%</span></div>
+      <div class="progress"><div class="progress-bar bg-success" style="width: {{ g.progress_pct }}%"></div></div>
+    </div>
+  {% endfor %}
+  <a href="{{ url_for('goals') }}" class="btn btn-outline-primary btn-sm mt-2 align-self-start">Manage goals →</a>
+</div>
+{% endif %}
+
+{% endblock %}
+{% block scripts %}
+{% if expenses %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+  const ctx = document.getElementById('catChart');
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: {{ expenses.keys()|list|tojson }},
+      datasets: [{
+        data: {{ expenses.values()|list|tojson }},
+        backgroundColor: ['#2e7d5b','#f2a541','#c0392b','#2c6fa8','#8e44ad','#16a085','#d35400','#7f8c8d','#e67e22','#2980b9'],
+      }]
+    },
+    options: { plugins: { legend: { position: 'bottom' } } }
+  });
+</script>
+{% endif %}
+{% endblock %}

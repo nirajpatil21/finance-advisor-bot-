@@ -1,0 +1,54 @@
+:root {
+  --primary: #2e7d5b;
+  --primary-dark: #1f5c40;
+  --accent: #f2a541;
+  --bg: #f6f8f7;
+}
+
+body { background: var(--bg); }
+
+.app-nav {
+  background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+}
+
+.card {
+  border: none;
+  border-radius: 14px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+}
+
+.stat-card {
+  border-radius: 14px;
+  padding: 1.25rem;
+  color: #fff;
+}
+.stat-card.income { background: linear-gradient(135deg, #2e7d5b, #43a677); }
+.stat-card.spent { background: linear-gradient(135deg, #c0392b, #e5766a); }
+.stat-card.savings { background: linear-gradient(135deg, #2c6fa8, #4f9bd1); }
+
+.stat-card h6 { opacity: 0.85; margin-bottom: 0.25rem; }
+.stat-card .value { font-size: 1.8rem; font-weight: 700; }
+
+.insight-item {
+  border-left: 4px solid var(--accent);
+  background: #fff8ec;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 0.6rem;
+}
+
+.progress { height: 10px; border-radius: 10px; }
+
+.btn-primary {
+  background-color: var(--primary);
+  border-color: var(--primary);
+}
+.btn-primary:hover {
+  background-color: var(--primary-dark);
+  border-color: var(--primary-dark);
+}
+
+.auth-wrapper {
+  max-width: 420px;
+  margin: 4rem auto;
+}
