@@ -16,6 +16,9 @@ otherwise, so it works fully offline out of the box).
 - Monthly financial report with category breakdown, selectable by month
 - Dashboard with a live spending-by-category chart
 
+## Project Report
+https://drive.google.com/file/d/1gS8XDkkoJS2-iHIw4OzC0JOkujwD1Lqm/view?usp=drivesdk
+
 ## Tech Stack
 - Backend: Flask, Flask-SQLAlchemy, Flask-Login
 - Database: SQLite (swap `DATABASE_URL` for Postgres/MySQL in production)
